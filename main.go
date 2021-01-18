@@ -5,6 +5,10 @@ import (
 	"net/http"
 	"encoding/json"
 	"io/ioutil"
+	"log"
+	"github.com/gorilla/mux"
+	"time"
+	"github.com/Chepubelka/go-rest-api/Authorization/auth"
 )
 
 type WeatherInfo struct {
@@ -12,51 +16,55 @@ type WeatherInfo struct {
   }
   
   type WeatherListItem struct {
-	Dt      int           `json:"dt"`
+	Time_weather	time.Time
 	Main    WeatherMain   `json:"main"`
-	Weather []WeatherType `json:"weather"`
   }
   
-  type WeatherMain struct {
-	Temp      float32 `json:"temp"`
-	FeelsLike float32 `json:"feels_like"`
-	Humidity  int     `json:"humidity"`
-  }
-  
-  type WeatherType struct {
-	Icon string `json:"icon"`
+  type WeatherMain struct {	
+	Temp      	float32 `json:"temp"`
+	FeelsLike 	float32 `json:"feels_like"`
+	Humidity  	int     `json:"humidity"`
   }
 
-  func getWeather() (*WeatherInfo, error) {
+  func getWeather(city string) (*WeatherInfo, error) {
 	openWeatherMapApiKey := "e13a95c00d42a26e75968f9b296ab61f"
-	var url = fmt.Sprintf("https://api.openweathermap.org/data/2.5/forecast?q=Rostov-On-Don&cnt=4&units=metric&appid=%s", openWeatherMapApiKey)
+	var url = fmt.Sprintf("https://api.openweathermap.org/data/2.5/forecast?q="+ city +"&cnt=3&units=metric&appid=%s", openWeatherMapApiKey)
 	response, err := http.Get(url)
 	if err != nil {
 		panic(err.Error())
 	}
 
 	body, err := ioutil.ReadAll(response.Body)
+
 	if err != nil {
 		panic(err.Error())
 	}
-
 	var weatherInfo = new(WeatherInfo)
 
 	err = json.Unmarshal(body, &weatherInfo)
-
 	return weatherInfo, err
 }
 
-func main() {
-	weather, err := getWeather()
+func returnWeather(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	city := vars["city"]
+	weather, err := getWeather(city)
 	if err != nil {
 		panic(err.Error())
 	}
 	for i := 0; i < len(weather.List); i++ {
-		var weatherForDay = weather.List[i]
-		fmt.Printf("Температура: %.2f °C ", weatherForDay.Main.Temp)
-		fmt.Printf("Ощущается как: %.2f °C ", weatherForDay.Main.FeelsLike)
-		fmt.Printf("Влажность: %d%%", weatherForDay.Main.Humidity)
-		fmt.Println()
+		weather.List[i].Time_weather = time.Now().AddDate(0, 0, i)
 	}
+	json.NewEncoder(w).Encode(weather.List)
+}
+
+func handleRequests() {
+	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/weather/{city}", returnWeather)
+	myRouter.HandleFunc("/v1/auth/token", createToken)
+	log.Fatal(http.ListenAndServe(":10000", myRouter))
+}
+
+func main() {
+	handleRequests()
 }
