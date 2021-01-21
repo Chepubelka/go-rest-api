@@ -42,6 +42,13 @@ type User struct {
 	password string
 }
 
+type LogsListItem struct {
+	user_id		int
+	email		string
+	date_time	time.Time
+	ip_addres	string
+}
+
 var (
 	ctx context.Context
 	db  *sql.DB
@@ -66,13 +73,13 @@ func getWeather(city string) (*WeatherInfo, error) {
 	return weatherInfo, err
 }
 
-func addLog(email string, operation_type string, ip_addr string) {
+func addLog(email string, operation_type string, ip_addr string, city string) {
 	db, err := sql.Open("mysql", "root:XGalHeg7.@/golang")
 	if err != nil {
 		panic(err)
 	}
 	user := getUser(email)
-	_, err = db.Exec("insert into logs(user_id, operation, date_time, ip_address) values (?, ?, ?, ?)", user.id, operation_type, time.Now(), ip_addr)
+	_, err = db.Exec("insert into logs(user_id, operation, date_time, ip_address, city) values (?, ?, ?, ?, ?)", user.id, operation_type, time.Now(), ip_addr, city)
 	if err != nil {
 		panic(err)
 	}
@@ -94,7 +101,7 @@ func returnWeather(w http.ResponseWriter, r *http.Request) {
 		panic(err.Error())
 	}
 	claims, _ := token.Claims.(jwt.MapClaims)
-	addLog(claims["user"].(string), "get weather", r.RemoteAddr)
+	addLog(claims["user"].(string), "get weather", r.RemoteAddr, city)
 	json.NewEncoder(w).Encode(weather.List)
 }
 
@@ -102,6 +109,7 @@ func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/token", TokenHandler)
 	myRouter.Handle("/weather/{city}", AuthMiddleware(http.HandlerFunc(returnWeather)))
+	myRouter.Handle("/logs/{city}", AuthMiddleware(http.HandlerFunc(getLogs)))
 	log.Fatal(http.ListenAndServe(":9999", myRouter))
 }
 
@@ -134,7 +142,7 @@ func TokenHandler(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		panic(err)
 	}
-	addLog(email, "user authorized", r.RemoteAddr)
+	addLog(email, "user authorized", r.RemoteAddr, "")
 	io.WriteString(w, `{"token":"`+tokenString+`"}`)
 	return
 }
@@ -165,6 +173,31 @@ func getUser(email string) *User {
 		panic(err.Error())
 	}
 	return user
+}
+
+func getLogs(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	city := vars["city"]
+	db, err := sql.Open("mysql", "root:XGalHeg7.@/golang")
+
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+	var log = new(LogsListItem)
+	rows:= db.QueryRow("select users.id, users.email, logs.date_time, logs.ip_address from users join logs on logs.user_id = users.id where logs.city = ?", city)
+	logs := []log{}
+	for rows.Next() {
+		l := log{}
+		err := rows.Scan(&logs.user_id, &logs.email, &logs.date_time, &logs.ip_address)
+		if err != nil{
+            fmt.Println(err)
+            continue
+		}
+		logs = append(logs, l)
+	}
+	io.WriteString(w, `{"data":"`+logs+`"}`)
+	return
 }
 
 func main() {
