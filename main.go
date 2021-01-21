@@ -25,7 +25,7 @@ type WeatherInfo struct {
 }
 
 type WeatherListItem struct {
-	Time_weather time.Time
+	Time_weather string
 	Main         WeatherMain `json:"main"`
 }
 
@@ -73,7 +73,7 @@ func returnWeather(w http.ResponseWriter, r *http.Request) {
 		panic(err.Error())
 	}
 	for i := 0; i < len(weather.List); i++ {
-		weather.List[i].Time_weather = time.Now().AddDate(0, 0, i)
+		weather.List[i].Time_weather = time.Now().AddDate(0, 0, i).Format(time.ANSIC)
 	}
 	json.NewEncoder(w).Encode(weather.List)
 }
