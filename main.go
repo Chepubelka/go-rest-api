@@ -43,10 +43,14 @@ type User struct {
 }
 
 type LogsListItem struct {
-	user_id		int
-	email		string
-	date_time	time.Time
-	ip_addres	string
+	User_id		int 	`json:"user_id"`
+	Email		string	`json:"email"`
+	Date_time	string	`json:"date_time"`
+	Ip_address	string	`json:"ip_address"`
+}
+
+type LogsList struct {
+	List []LogsListItem `json:"list"`
 }
 
 var (
@@ -184,19 +188,20 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	defer db.Close()
-	var log = new(LogsListItem)
-	rows:= db.QueryRow("select users.id, users.email, logs.date_time, logs.ip_address from users join logs on logs.user_id = users.id where logs.city = ?", city)
-	logs := []log{}
+	rows, err := db.Query("select users.id, users.email, logs.date_time, logs.ip_address from users join logs on logs.user_id = users.id where logs.city = ?", city)
+	logs := LogsList{}
 	for rows.Next() {
-		l := log{}
-		err := rows.Scan(&logs.user_id, &logs.email, &logs.date_time, &logs.ip_address)
+		l := LogsListItem{}
+		err := rows.Scan(&l.User_id, &l.Email, &l.Date_time, &l.Ip_address)
 		if err != nil{
             fmt.Println(err)
             continue
 		}
-		logs = append(logs, l)
+		logs.List = append(logs.List, l)
 	}
-	io.WriteString(w, `{"data":"`+logs+`"}`)
+	w.Header().Set("Content-Type", "application/json")
+	responseLogs, _ := json.Marshal(logs)
+	w.Write(responseLogs)
 	return
 }
 
