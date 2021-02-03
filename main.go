@@ -10,6 +10,9 @@ import (
 	"log"
 	"net/http"
 	"time"
+	"path"
+	"html/template"
+	"net/http/pprof"
 
 	jwtmiddleware "github.com/auth0/go-jwt-middleware"
 	"github.com/form3tech-oss/jwt-go"
@@ -111,10 +114,16 @@ func returnWeather(w http.ResponseWriter, r *http.Request) {
 
 func handleRequests() {
 	myRouter := mux.NewRouter().StrictSlash(true)
+	myRouter.HandleFunc("/", render)
 	myRouter.HandleFunc("/token", TokenHandler)
 	myRouter.Handle("/weather/{city}", AuthMiddleware(http.HandlerFunc(returnWeather)))
 	myRouter.Handle("/logs/{city}", AuthMiddleware(http.HandlerFunc(getLogs)))
-	log.Fatal(http.ListenAndServe(":9999", myRouter))
+	myRouter.HandleFunc("/debug/pprof/", pprof.Index)
+    myRouter.HandleFunc("/debug/pprof/cmdline", pprof.Cmdline)
+    myRouter.HandleFunc("/debug/pprof/profile", pprof.Profile)
+    myRouter.HandleFunc("/debug/pprof/symbol", pprof.Symbol)
+    myRouter.HandleFunc("/debug/pprof/trace", pprof.Trace)
+	log.Fatal(http.ListenAndServe(":8080", myRouter))
 }
 
 func TokenHandler(w http.ResponseWriter, r *http.Request) {
@@ -203,6 +212,18 @@ func getLogs(w http.ResponseWriter, r *http.Request) {
 	responseLogs, _ := json.Marshal(logs)
 	w.Write(responseLogs)
 	return
+}
+
+func render(w http.ResponseWriter, r *http.Request) {
+	fp := path.Join("views", "index.html")
+	tmpl, err := template.ParseFiles(fp)
+	if err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+        return
+	}
+	if err := tmpl.Execute(w, ""); err != nil {
+        http.Error(w, err.Error(), http.StatusInternalServerError)
+    }
 }
 
 func main() {
